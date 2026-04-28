@@ -1,0 +1,18 @@
+# From microservice-app root
+cat > .gitignore << 'EOF'
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Python
+backend/__pycache__/
+backend/*.pyc
+*.egg-info/
+
+# Environment
+.env
+.env.local
+
+# Docker
+*.log
+EOF
