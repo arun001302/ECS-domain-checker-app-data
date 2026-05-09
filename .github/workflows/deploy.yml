@@ -19,16 +19,24 @@ jobs:
     name: Build and Deploy
     runs-on: ubuntu-latest
 
+    # Required for OIDC token generation
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      # OIDC authentication — no stored credentials needed
+      # GitHub requests a short-lived token from AWS on every run
+      # AWS trusts GitHub's identity provider and issues temporary credentials
+      # These expire after the job completes — much more secure than static keys
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume: arn:aws:iam::831959027212:role/domain-checker-prod-github-actions-role
+          role-session-name: github-actions-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
