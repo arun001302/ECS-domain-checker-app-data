@@ -1,0 +1,93 @@
+name: Build and Deploy to ECS
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 831959027212.dkr.ecr.us-east-1.amazonaws.com
+  BACKEND_IMAGE: domain-checker-backend
+  FRONTEND_IMAGE: domain-checker-frontend
+  ECS_CLUSTER: domain-checker-prod-cluster
+  BACKEND_SERVICE: domain-checker-prod-backend
+  FRONTEND_SERVICE: domain-checker-prod-frontend
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $ECR_REGISTRY/$BACKEND_IMAGE:${{ github.sha }} \
+            -t $ECR_REGISTRY/$BACKEND_IMAGE:latest \
+            ./backend
+          docker push $ECR_REGISTRY/$BACKEND_IMAGE:${{ github.sha }}
+          docker push $ECR_REGISTRY/$BACKEND_IMAGE:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $ECR_REGISTRY/$FRONTEND_IMAGE:${{ github.sha }} \
+            -t $ECR_REGISTRY/$FRONTEND_IMAGE:latest \
+            ./frontend
+          docker push $ECR_REGISTRY/$FRONTEND_IMAGE:${{ github.sha }}
+          docker push $ECR_REGISTRY/$FRONTEND_IMAGE:latest
+
+      - name: Deploy backend to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $BACKEND_SERVICE \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Deploy frontend to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $FRONTEND_SERVICE \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Wait for backend deployment to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $BACKEND_SERVICE \
+            --region $AWS_REGION
+
+      - name: Wait for frontend deployment to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $FRONTEND_SERVICE \
+            --region $AWS_REGION
+
+      - name: Deployment complete
+        run: |
+          echo "✅ Deployment complete"
+          echo "Backend image: $ECR_REGISTRY/$BACKEND_IMAGE:${{ github.sha }}"
+          echo "Frontend image: $ECR_REGISTRY/$FRONTEND_IMAGE:${{ github.sha }}"
+          echo "App URL: http://domain-checker-prod-alb-1264724004.us-east-1.elb.amazonaws.com"
