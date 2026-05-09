@@ -1,5 +1,4 @@
-# From microservice-app root
-cat > .gitignore << 'EOF'
+EOF'
 # Node
 frontend/node_modules/
 frontend/dist/
